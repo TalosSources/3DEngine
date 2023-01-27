@@ -1,6 +1,9 @@
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.sql.Time;
 import java.util.Random;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.imageio.ImageIO;
 import java.io.File;
@@ -14,8 +17,8 @@ public class Main{
 
     public static void main(String[] args) {
 
-        Screen screen = new Screen(new Vector2(-8, -8 * 108.0 / 192.0), new Vector2(8, 8 * 108.0 / 192.0), 576, 324, 3);
-        PerspectiveProjector projector = new PerspectiveProjector(5);
+        Screen screen = new Screen(new Vector2(-8, -8 * 108.0 / 192.0), new Vector2(8, 8 * 108.0 / 192.0), 1280, 720, 1);
+        PerspectiveProjector projector = new PerspectiveProjector(4);
 
         JFrame frame = new JFrame();
         frame.getContentPane().setLayout(new FlowLayout());
@@ -31,9 +34,12 @@ public class Main{
         boolean move = true;
         double speedx = 0;
         double amplitudex = 0;
-        double speedy = 3;
-        double amplitudey = 0.7;
-        double rotation_speed = 2;
+        double speedy = 1.1;
+        double amplitudey = 1.5;
+        double speedz = 1.1;
+        double amplitudez = 1.5;
+        double rotation_speedx = 1;
+        double rotation_speedy = 1;
         //double speed_translation = 2;
 
         //int nCube = 3;
@@ -46,11 +52,28 @@ public class Main{
         //int replacements = 0;
         //int replacement_wait = 15;
 
-        Cube cube = new Cube(new Vector3(-1, -1.5, 4), 2, 0x77ff00ff);
-        Vector3 cube_center = new Vector3(0, -0.5, 5);
+        int cube_square_size = 30;
+        int nCubes = cube_square_size * cube_square_size;
+        double minx_cubes = -1;
+        double maxx_cubes = 1;
+        double minz_cubes = -1;
+        double maxz_cubes = 5;
+        Object3D[] objects = new Object3D[nCubes];
+        for(int i = 0; i < nCubes; ++i) {
+            objects[i] = new Cube(
+                new Vector3((double)(i % cube_square_size) * (maxx_cubes - minx_cubes) / (cube_square_size - 1) + minx_cubes,
+                    new Random().nextDouble() * 4 - 2, 
+                            (double) (i / cube_square_size) * (maxz_cubes - minz_cubes) / (cube_square_size - 1) + minz_cubes
+                        ), 
+                     (maxx_cubes - minx_cubes) / cube_square_size, 0xffff00, i * 8);
+        }
+        //Cube cube1 = new Cube(new Vector3(-2, -1.5, 4), 2, 0x77ff00ff, 0);
+        //Vector3 cube_center1 = new Vector3(-1, -0.5, 5);
+        //Cube cube2 = new Cube(new Vector3(1, -1.5, 4), 2, 0x77ff00ff, 8);
+        //Vector3 cube_center2 = new Vector3(2, -0.5, 5);
 
-        Vector3[] base_points = cube.points();
-        Triangle triangles[] = cube.triangles();
+        Vector3[] base_points = get_points(objects);
+        Triangle triangles[] = get_triangles(objects);
         for (Triangle t : triangles) {
             t.compute_inner_triangle_normal(base_points);
         }
@@ -69,7 +92,9 @@ public class Main{
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            t1 = System.nanoTime();
+            long current_time = System.nanoTime();
+            //System.out.printf("Frame time : %f ms\n", (current_time - t1) * 1e-6);
+            t1 = current_time;
             double elapsed = (t1 - t0) * 1e-9;
 
 
@@ -102,13 +127,14 @@ public class Main{
             //}
 
             Vector3 offset = move ? new Vector3(Math.sin((t1 - t0)* 1e-9 * speedx) * amplitudex, 
-                Math.sin((t1 - t0)* 1e-9 * speedy) * amplitudey, 0) : new Vector3(2,2, 2);
+                Math.sin((t1 - t0)* 1e-9 * speedy) * amplitudey, Math.sin((t1 - t0)* 1e-9 * speedz) * amplitudez) : new Vector3(2,2, 2);
             
 
             Vector3[] points = new Vector3[base_points.length];
             for(int i = 0; i < points.length; ++i) {
                 points[i] = base_points[i].plus(offset);
-                points[i] = points[i].rotate_y_axis(cube_center.plus(offset), (t1 - t0) * 1e-9 * rotation_speed);
+                points[i] = points[i].rotate_y_axis(base_points[i - (i % 8)].plus(offset), (t1 - t0) * 1e-9 * rotation_speedy);
+                points[i] = points[i].rotate_x_axis(base_points[i - (i % 8)].plus(offset), (t1 - t0) * 1e-9 * rotation_speedx);
             }
 
             screen.resetImage();
@@ -123,6 +149,45 @@ public class Main{
         //screen.save("png", new File("result.png"));
 
     }
+
+    private static Vector3[] get_points(Object3D[] objects) {
+
+        int length = 0;
+        for(Object3D o : objects) length += o.points().length;
+
+        Vector3[] result = new Vector3[length];
+
+        int i = 0;
+        for(Object3D o : objects) {
+            for (Vector3 v : o.points()) {
+                result[i] = v;
+                i += 1;
+            }
+        }
+
+        return result;
+
+    }
+
+    private static Triangle[] get_triangles(Object3D[] objects) {
+
+        int length = 0;
+        for(Object3D o : objects) length += o.triangles().length;
+
+        Triangle[] result = new Triangle[length];
+
+        int i = 0;
+        for(Object3D o : objects) {
+            for (Triangle v : o.triangles()) {
+                result[i] = v;
+                i += 1;
+            }
+        }
+
+        return result;
+
+    }
+
 }
 
 interface Object3D {
@@ -143,37 +208,26 @@ class Cube implements Object3D {
     private final int color;
 
     private final Vector3[] points;
-    //private final Line[] lines = {
-    //    new Line(0, 1),
-    //    new Line(1, 3),
-    //    new Line(3, 2),
-    //    new Line(2, 0),
-    //    new Line(4, 5),
-    //    new Line(5, 7),
-    //    new Line(7, 6),
-    //    new Line(6, 4),
-    //    new Line(0, 4),
-    //    new Line(1, 5),
-    //    new Line(2, 6),
-    //    new Line(3, 7)
-    //};
 
-    private final Triangle[] triangles = {
-        new Triangle(0, 1, 3, 4), //front
-        new Triangle(0, 2, 3, 4),
-        new Triangle(4, 5, 7, 0), //back
-        new Triangle(4, 6, 7, 0),
-        new Triangle(0, 1, 5, 7), //bottom
-        new Triangle(0, 4, 5, 7),
-        new Triangle(0, 4, 6, 7), //left
-        new Triangle(0, 2, 6, 7),
-        new Triangle(2, 3, 7, 0), //top
-        new Triangle(2, 6, 7, 0),
-        new Triangle(1, 5, 7, 0), //right
-        new Triangle(1, 3, 7, 0)
+    private final Triangle[] triangles;
+    private final int offset;
+
+    public static int[][] cube_triangle_data = {
+        {0, 1, 3},
+        {0, 3, 2},
+        {4, 7, 5},
+        {4, 6, 7},
+        {0, 5, 1},
+        {0, 4, 5},
+        {0, 6, 4},
+        {0, 2, 6},
+        {2, 3, 7},
+        {2, 7, 6},
+        {1, 5, 7},
+        {1, 7, 3}
     };
 
-    public Cube(Vector3 bottomLeft, double size, int color) {
+    public Cube(Vector3 bottomLeft, double size, int color, int offset) {
         this.bottomLeft = bottomLeft;
         this.size = size;
 
@@ -189,20 +243,26 @@ class Cube implements Object3D {
             }
         }
 
+        this.offset = offset;
+        this.triangles = new Triangle[12];
+        for(int i = 0; i < triangles.length; ++i) {
+            triangles[i] = new Triangle(cube_triangle_data[i][0] + offset, cube_triangle_data[i][1] + offset, cube_triangle_data[i][2] + offset);
+        }
+
     }
 
-    public static Cube randomCube(Random random, double x1, double x2, double y1, double y2, double z1, double z2, double s1, double s2) {
+    public static Cube randomCube(Random random, double x1, double x2, double y1, double y2, double z1, double z2, double s1, double s2, int offset) {
 
         double x = random.nextDouble() * (x2 - x1) + x1;
         double y = random.nextDouble() * (y2 - y1) + y1;
         double z = random.nextDouble() * (z2 - z1) + z1;
         double s = random.nextDouble() * (s2 - s1) + s1;
 
-        return new Cube(new Vector3(x, y, z), s, random.nextInt());
+        return new Cube(new Vector3(x, y, z), s, 0x44cc99, offset);
     } 
 
-    public Cube transform(Vector3 offset, double scale) {
-        return new Cube(this.bottomLeft.plus(offset), this.size * scale, this.color);
+    public Cube transform(Vector3 offset, double scale, int i_offset) {
+        return new Cube(this.bottomLeft.plus(offset), this.size * scale, this.color, i_offset);
     }
 
     public Vector3[] points() {
@@ -330,8 +390,23 @@ class Vector3{
         double sin = Math.sin(angle);
         Vector3 rotated = new Vector3(
             cos * centered.x + sin * centered.z,
-            y,
+            centered.y,
             -sin * centered.x + cos * centered.z
+        );
+
+        return rotated.plus(center);
+    }
+
+    public Vector3 rotate_x_axis(Vector3 center, double angle) {
+
+        Vector3 centered = this.minus(center);
+
+        double cos = Math.cos(angle);
+        double sin = Math.sin(angle);
+        Vector3 rotated = new Vector3(
+            centered.x,
+            cos * centered.y - sin * centered.z,
+            sin * centered.y + cos * centered.z
         );
 
         return rotated.plus(center);
@@ -407,11 +482,10 @@ class Sphere {
 class Triangle {
 
     private final int i1, i2, i3;
-    private final int ref_id;
 
-    public final double r = new Random().nextDouble(); 
-    public final double g = new Random().nextDouble(); 
-    public final double b = new Random().nextDouble(); 
+    public final double r = 0.25; 
+    public final double g = 0.75; 
+    public final double b = 0.55; 
 
 
     //cached normal vectors to the sides of the triangle
@@ -421,13 +495,11 @@ class Triangle {
     //cached 3D inner normal of the triangle
     private Vector3 n;
 
-    public Triangle(int i1, int i2, int i3, int ref_id) {
+    public Triangle(int i1, int i2, int i3) {
 
         this.i1 = i1;
         this.i2 = i2; 
         this.i3 = i3;
-
-        this.ref_id = ref_id;
 
     }
 
@@ -458,18 +530,19 @@ class Triangle {
     public Vector3 p2(Vector3[] points) {return points[i2];}
     public Vector3 p3(Vector3[] points) {return points[i3];}
 
+    public Vector2 p1(Vector2[] points) {return points[i1];}
+    public Vector2 p2(Vector2[] points) {return points[i2];}
+    public Vector2 p3(Vector2[] points) {return points[i3];}
+
     public void compute_inner_triangle_normal(Vector3[] points) {
 
         //Goal is to find a normal vector pointing to the interior of the object the triangle is in
 
-        Vector3 p1 = points[i1], p2 = points[i2], p3 = points[i3], ref = points[ref_id];
+        Vector3 p1 = points[i1], p2 = points[i2], p3 = points[i3];
 
         Vector3 d1 = p2.minus(p1), d2 = p3.minus(p1);
 
-        n = d1.cross(d2);
-
-        n = n.scale(Math.signum(n.dot(ref.minus(p1)))).normalized();
-
+        n = d1.cross(d2).normalized();
     }
 
     public Vector3 normal() {
@@ -541,12 +614,14 @@ class Line {
 }
 
 class Screen {
-    private boolean print = true;
 
     private final Vector2 bottomLeft, topRight;
+    private final double rlx, rly;
+    private final double rli, rlj;
+
     private final int width, height;
     private final int upscale;
-    private final BufferedImage image;
+    private BufferedImage image;
 
     public Screen(Vector2 bottomLeft, Vector2 topRight, int width, int height, int upscale) {
         
@@ -556,13 +631,30 @@ class Screen {
         this.height = height;
         this.upscale = upscale;
 
+        this.rlx = (topRight.x() - bottomLeft.x()) / width;
+        this.rly = (topRight.y() - bottomLeft.y()) / height;
+        this.rli = 1 / this.rlx;
+        this.rlj = 1 / this.rly;
+
         this.image = new BufferedImage(width * upscale, height * upscale, BufferedImage.TYPE_INT_RGB);
+    }
+
+    private Vector2 point_from_pixel(int i, int j) {
+        return new Vector2( rlx * i + x1(), rly * j + y1());
+    }
+
+    private int i_from_x(double x) {
+        return (int) (rli * (x - x1()));
+    }
+
+    private int j_from_y(double y) {
+        return (int) (rlj * (y - y1()));
     }
 
     public void drawPoint(Vector2 point, int color) {
 
-        int i = (int) (width * (point.x() - x1()) / (x2() - x1()));
-        int j = (int) (height * (topRight.y() - point.y() - y1()) / (y2() - y1()));
+        int i = i_from_x(point.x());
+        int j = j_from_y(point.y());
 
         drawPixel(i, j, color);        
 
@@ -597,59 +689,106 @@ class Screen {
         }
     }
 
+    private void rasterize(Triangle[] triangles, int start, int end, Vector3[] points, Vector2[] projected_points, Vector3[] light_dirs) {
+        for(int k = start; k < end; ++k) {
+            Triangle t = triangles[k];
+            if(t.p1(projected_points) == null || t.p2(projected_points) == null || t.p3(projected_points) == null) continue;
+
+            if(t.normal().dot(t.p1(points)) <= 0) continue;
+
+            //find min and max indices for i and j
+
+            double minx = Math.min(Math.min(t.p1(projected_points).x(), t.p2(projected_points).x()), t.p3(projected_points).x());
+            double miny = Math.min(Math.min(t.p1(projected_points).y(), t.p2(projected_points).y()), t.p3(projected_points).y());
+            double maxx = Math.max(Math.max(t.p1(projected_points).x(), t.p2(projected_points).x()), t.p3(projected_points).x());
+            double maxy = Math.max(Math.max(t.p1(projected_points).y(), t.p2(projected_points).y()), t.p3(projected_points).y());
+
+            int mini = Math.max(1, i_from_x(minx)); //clamp to w and h for performance
+            int minj = Math.max(1, j_from_y(miny));
+            int maxi = Math.min(width-1, i_from_x(maxx));
+            int maxj = Math.min(height-1, j_from_y(maxy));
+
+            for(int i = mini-1; i < maxi+1; ++i) {
+                //boolean previous_contained = false;
+                for(int j = minj-1; j < maxj+1; ++j) {
+                    Vector2 point = point_from_pixel(i, j);
+
+                    if(t.contains(point, projected_points)) {
+                        //if(previous_contained) {
+                            //Shading stuff
+
+                            double r = t.r;
+                            double g = t.g;
+                            double b = t.b;
+
+                            double intensity = 0;
+                            for (Vector3 light_dir : light_dirs) {
+                                intensity += Math.max(0, light_dir.dot(t.normal()));
+                            } 
+                            //intensity = 1.0;
+                            r = Math.min(r * intensity, 1);
+                            g = Math.min(g * intensity, 1);
+                            b = Math.min(b * intensity, 1);
+
+                            int ir = (int) (r * 0xff);
+                            int ig = (int) (g * 0xff);
+                            int ib = (int) (b * 0xff);
+
+                            int rgb = (ir << 16) | (ig << 8) | (ib);
+
+                            drawPixel(i, j, rgb);
+                        /* } else {
+                            previous_contained = true;
+                            drawPixel(i, j, 0xffffff);
+                        }
+                     } else {
+                        if(previous_contained) {
+                            drawPixel(i, j, 0xffffff);
+                        }
+                        previous_contained = false;*/
+                    }
+                }
+            }
+        }
+    }
+
     public void drawTriangles(Triangle[] triangles, Vector3[] points, PerspectiveProjector projector, Vector3[] light_dirs) {
 
         Vector2[] projected_points = new Vector2[points.length];
         for(int i = 0; i < points.length; ++i) {
-            projected_points[i] = points[i].z() < 0.5  ? null : projector.project(points[i]);
+            projected_points[i] = points[i].z() < 0.2  ? null : projector.project(points[i]);
         }
         for(Triangle t : triangles) {
             t.computed = false;
             t.compute_inner_triangle_normal(points);
         }
 
-        for(int i = 0; i < width; ++i) {
-            for(int j = 0; j < height; ++j) {
-
-                Vector2 point = new Vector2((x2() - x1()) * i / width + x1(), (y2() - y1()) * j / height + y1());
-
-                for(Triangle t : triangles) {
-                    if(print)
-                        System.out.println("T is " + t + ", p1 is " + t.p1(points));
-                    if(t.normal().dot(t.p1(points)) <= 0) continue;
-                    if(t.contains(point, projected_points)) {
-                        //Shading stuff
-
-                        double r = t.r;
-                        double g = t.g;
-                        double b = t.b;
-
-                        double intensity = 0;
-                        for (Vector3 light_dir : light_dirs) {
-                            intensity += Math.max(0, light_dir.dot(t.normal()));
-                        } 
-                        //intensity = 1.0;
-                        r = Math.min(r * intensity, 1);
-                        g = Math.min(g * intensity, 1);
-                        b = Math.min(b * intensity, 1);
-
-                        int ir = (int) (r * 0xff);
-                        int ig = (int) (g * 0xff);
-                        int ib = (int) (b * 0xff);
-
-                        int rgb = (ir << 16) | (ig << 8) | (ib);
-
-                        drawPixel(i, j, rgb);
-
-                        break;
-
-                    }
-                }
-                print = false;
-            }
+        int n_threads = 8;
+        Thread[] threads = new Thread[n_threads];
+        long t0 = System.nanoTime();
+        double ratio = (double) triangles.length / n_threads; //the amount of triangles to handle per thread
+        for(int i = 0; i < n_threads; ++i) {
+            final int start = (int) (ratio * i);
+            final int end = (int) (ratio * (i+1));
+            threads[i] = new Thread(() -> {
+                rasterize(triangles, start, end, points, projected_points, light_dirs);
+            });
+            threads[i].start();
         }
 
+        for(Thread t : threads) {
+            try {
+                t.join();
+            } catch (InterruptedException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+        double dt = (System.nanoTime() - t0) * 1e-6;
+        //System.out.printf("Time for threads rasterisation : %f ms \n", dt);
+
     }
+
 
     public void save(String format, File file) {
 
@@ -666,11 +805,8 @@ class Screen {
     }
 
     public void resetImage() {
-        for(int i = 0; i < width*upscale; ++i) {
-            for(int j = 0; j < height*upscale; ++j) {
-                image.setRGB(i, j, 0xff000000);
-            } 
-        }
+        this.image = new BufferedImage(width*upscale, height*upscale, image.getType());
+        return;
     }
 
     public Vector2 bottomLeft() {
