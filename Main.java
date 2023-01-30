@@ -3,10 +3,15 @@ import java.io.IOException;
 import java.sql.Time;
 import java.util.Random;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 import javax.imageio.ImageIO;
+
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 
 import javax.swing.*;
 import java.awt.*;
@@ -36,9 +41,9 @@ public class Main{
         double amplitudex = 0;
         double speedy = 1.1;
         double amplitudey = 1.5;
-        double speedz = 1.1;
-        double amplitudez = 1.5;
-        double rotation_speedx = 1;
+        double speedz = 0;
+        double amplitudez = 0;
+        double rotation_speedx = 1.2;
         double rotation_speedy = 1;
         //double speed_translation = 2;
 
@@ -52,25 +57,27 @@ public class Main{
         //int replacements = 0;
         //int replacement_wait = 15;
 
-        int cube_square_size = 30;
-        int nCubes = cube_square_size * cube_square_size;
-        double minx_cubes = -1;
-        double maxx_cubes = 1;
-        double minz_cubes = -1;
-        double maxz_cubes = 5;
-        Object3D[] objects = new Object3D[nCubes];
-        for(int i = 0; i < nCubes; ++i) {
-            objects[i] = new Cube(
-                new Vector3((double)(i % cube_square_size) * (maxx_cubes - minx_cubes) / (cube_square_size - 1) + minx_cubes,
-                    new Random().nextDouble() * 4 - 2, 
-                            (double) (i / cube_square_size) * (maxz_cubes - minz_cubes) / (cube_square_size - 1) + minz_cubes
-                        ), 
-                     (maxx_cubes - minx_cubes) / cube_square_size, 0xffff00, i * 8);
-        }
+        //int cube_square_size = 30;
+        //int nCubes = cube_square_size * cube_square_size;
+        //double minx_cubes = -1;
+        //double maxx_cubes = 1;
+        //double minz_cubes = -1;
+        //double maxz_cubes = 5;
+        //Object3D[] objects = new Object3D[nCubes];
+        //for(int i = 0; i < nCubes; ++i) {
+        //    objects[i] = new Cube(
+        //        new Vector3((double)(i % cube_square_size) * (maxx_cubes - minx_cubes) / (cube_square_size - 1) + minx_cubes,
+        //            new Random().nextDouble() * 4 - 2, 
+        //                    (double) (i / cube_square_size) * (maxz_cubes - minz_cubes) / (cube_square_size - 1) + minz_cubes
+        //                ), 
+        //             (maxx_cubes - minx_cubes) / cube_square_size, 0xffff00, i * 8);
+        //}
         //Cube cube1 = new Cube(new Vector3(-2, -1.5, 4), 2, 0x77ff00ff, 0);
         //Vector3 cube_center1 = new Vector3(-1, -0.5, 5);
         //Cube cube2 = new Cube(new Vector3(1, -1.5, 4), 2, 0x77ff00ff, 8);
         //Vector3 cube_center2 = new Vector3(2, -0.5, 5);
+
+        Object3D[] objects = { Object3D.readObj(new File("monkey.obj")) };
 
         Vector3[] base_points = get_points(objects);
         Triangle triangles[] = get_triangles(objects);
@@ -127,14 +134,14 @@ public class Main{
             //}
 
             Vector3 offset = move ? new Vector3(Math.sin((t1 - t0)* 1e-9 * speedx) * amplitudex, 
-                Math.sin((t1 - t0)* 1e-9 * speedy) * amplitudey, Math.sin((t1 - t0)* 1e-9 * speedz) * amplitudez) : new Vector3(2,2, 2);
+                Math.sin((t1 - t0)* 1e-9 * speedy) * amplitudey, Math.sin((t1 - t0)* 1e-9 * speedz) * amplitudez + 4) : new Vector3(2,2, 2);
             
 
             Vector3[] points = new Vector3[base_points.length];
             for(int i = 0; i < points.length; ++i) {
                 points[i] = base_points[i].plus(offset);
-                points[i] = points[i].rotate_y_axis(base_points[i - (i % 8)].plus(offset), (t1 - t0) * 1e-9 * rotation_speedy);
-                points[i] = points[i].rotate_x_axis(base_points[i - (i % 8)].plus(offset), (t1 - t0) * 1e-9 * rotation_speedx);
+                points[i] = points[i].rotate_y_axis(offset, (t1 - t0) * 1e-9 * rotation_speedy);
+                points[i] = points[i].rotate_x_axis(offset, (t1 - t0) * 1e-9 * rotation_speedx);
             }
 
             screen.resetImage();
@@ -198,6 +205,73 @@ interface Object3D {
 
     int color();
 
+    public static Object3D readObj(File file) {
+
+        List<String> lines = new ArrayList<>();
+
+        try (BufferedReader bf = new BufferedReader(new FileReader(file))) {
+            String l;
+            while((l = bf.readLine()) != null) {
+                lines.add(l);
+            }
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+        int nVertices = 0;
+        int nTriangles = 0;
+        for(String s : lines) {
+            if(s.startsWith("v ")) nVertices++;
+            if(s.startsWith("f ")) nTriangles++;
+        }
+
+        Vector3[] vertices = new Vector3[nVertices];
+        Triangle[] triangles = new Triangle[nTriangles]; 
+
+        int iV = 0;
+        int iT = 0;
+        for(String s : lines) {
+
+            String[] split = s.split(" ");
+
+            if(split[0].equals("v")) {
+                vertices[iV] = new Vector3(Double.parseDouble(split[1]), Double.parseDouble(split[2]), Double.parseDouble(split[3]));
+                iV += 1;
+            } else if(split[0].equals("f")) {
+                triangles[iT] = new Triangle(Integer.parseInt(split[1]) - 1, Integer.parseInt(split[2]) - 1, Integer.parseInt(split[3]) - 1);
+                iT += 1;
+            }
+        }
+
+        return new GeneralObject3D(vertices, triangles);
+
+    } 
+
+}
+
+class GeneralObject3D implements Object3D {
+
+    Vector3[] points;
+    Triangle[] triangles;
+
+    public GeneralObject3D(Vector3[] points, Triangle[] triangles) {
+        this.points = points;
+        this.triangles = triangles;
+    }
+
+    public Vector3[] points() {
+        return points;
+    }
+
+    public Triangle[] triangles() {
+        return triangles;
+    }
+
+    public int color() {
+        return 0;
+    }
+ 
 }
 
 class Cube implements Object3D {
@@ -542,7 +616,7 @@ class Triangle {
 
         Vector3 d1 = p2.minus(p1), d2 = p3.minus(p1);
 
-        n = d1.cross(d2).normalized();
+        n = d1.cross(d2).normalized().scale(-1);
     }
 
     public Vector3 normal() {
@@ -622,6 +696,15 @@ class Screen {
     private final int width, height;
     private final int upscale;
     private BufferedImage image;
+
+    public Comparator<Triangle> zTriComparator(Vector3[] points) {
+        return (t1, t2) -> {
+            double z1 = Math.min(t1.p1(points).z(), Math.min(t1.p2(points).z(), t1.p3(points).z())); 
+            double z2 = Math.min(t2.p1(points).z(), Math.min(t2.p2(points).z(), t2.p3(points).z())); 
+
+            return Double.compare(z2, z1);
+        };
+    }
 
     public Screen(Vector2 bottomLeft, Vector2 topRight, int width, int height, int upscale) {
         
@@ -763,7 +846,9 @@ class Screen {
             t.compute_inner_triangle_normal(points);
         }
 
-        int n_threads = 8;
+        Arrays.sort(triangles, zTriComparator(points));
+
+        int n_threads = 1;
         Thread[] threads = new Thread[n_threads];
         long t0 = System.nanoTime();
         double ratio = (double) triangles.length / n_threads; //the amount of triangles to handle per thread
