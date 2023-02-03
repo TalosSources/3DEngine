@@ -21,10 +21,10 @@ public class Main{
 
     public static void main(String[] args) {
 
-        int width = 300, height = 300;
+        int width = 1000, height = 1000;
 
-        Screen screen = new Screen(new Vector2(-8, -8), new Vector2(8, 8), width, height, 3);
-        PerspectiveProjector projector = new PerspectiveProjector(4);
+        Screen screen = new Screen(new Vector2(-8, -8), new Vector2(8, 8), width, height, 1);
+        PerspectiveProjector projector = new PerspectiveProjector(5);
 
         JFrame frame = new JFrame();
         frame.setSize(width, height);
@@ -41,12 +41,12 @@ public class Main{
         boolean move = true;
         double speedx = 0;
         double amplitudex = 0;
-        double speedy = 2.3;
+        double speedy = 2;
         double amplitudey = 1.5;
         double speedz = 0;
         double amplitudez = 0;
-        double rotation_speedx = 1;
-        double rotation_speedy = 3;
+        double rotation_speedx = 0.5;
+        double rotation_speedy = 1.5;
         //double speed_translation = 2;
 
         //int nCube = 3;
@@ -79,7 +79,7 @@ public class Main{
         //Cube cube2 = new Cube(new Vector3(1, -1.5, 4), 2, 0x77ff00ff, 8);
         //Vector3 cube_center2 = new Vector3(2, -0.5, 5);
 
-        Object3D[] objects = { Object3D.readObj(new File("models/teapot.obj")) };
+        Object3D[] objects = { Object3D.readObj(new File("models/spaceship.obj")) };
 
         Vector3[] base_points = get_points(objects);
         Triangle triangles[] = get_triangles(objects);
@@ -138,7 +138,7 @@ public class Main{
             long tbt = System.nanoTime();
 
             Vector3 offset = move ? new Vector3(Math.sin((t1 - t0)* 1e-9 * speedx) * amplitudex, 
-                Math.sin((t1 - t0)* 1e-9 * speedy) * amplitudey -2, Math.sin((t1 - t0)* 1e-9 * speedz) * amplitudez + 5) : new Vector3(2,2, 2);
+                Math.sin((t1 - t0)* 1e-9 * speedy) * amplitudey, Math.sin((t1 - t0)* 1e-9 * speedz) * amplitudez + 6) : new Vector3(2,2, 2);
             
             int n_threads = 1;
             Thread[] threads = new Thread[n_threads];
@@ -589,7 +589,7 @@ class Sphere {
 
 class Triangle {
 
-    private final int i1, i2, i3;
+    public final int i1, i2, i3;
 
     public final double r = 0.871; 
     public final double g = 0.667; 
@@ -808,7 +808,7 @@ class Screen {
 
     private double illumination(Triangle t, Vector3 light_dir) {
 
-        double k_d = 0.1;
+        double k_d = 0.4;
         double k_s = 1.0;
         double ambiant = 0.1;
         double cst = 0.8;
@@ -818,13 +818,13 @@ class Screen {
 
         Vector3 v = new Vector3(0, 0, 1);
         Vector3 h = light_dir.plus(v).normalized();
-        double q = 10;
+        double q = 70;
         double specular = k_s * Math.pow(t.normal().dot(h), q);
 
         return ambiant + (diffuse + specular) * cst;
     }
 
-    private void rasterize(Triangle[] triangles, int start, int end, Vector3[] points, Vector2[] projected_points, Vector3[] light_dirs) {
+    private void rasterize(Triangle[] triangles, int start, int end, Vector3[] points, Vector2[] projected_points, VertexShadingState[] vSS) {
         for(int k = start; k < end; ++k) {
             Triangle t = triangles[k];
             if(t.p1(projected_points) == null || t.p2(projected_points) == null || t.p3(projected_points) == null) continue;
@@ -843,6 +843,8 @@ class Screen {
             int maxi = Math.min(width-1, i_from_x(maxx));
             int maxj = Math.min(height-1, j_from_y(maxy));
 
+            Vector3 average_pos = t.p1(points).plus(t.p2(points)).plus(t.p3(points));
+
             for(int i = mini-1; i < maxi+1; ++i) {
                 //boolean previous_contained = false;
                 for(int j = minj-1; j < maxj+1; ++j) {
@@ -852,15 +854,25 @@ class Screen {
                         //if(previous_contained) {
                             //Shading stuff
 
-                            double intensity = illumination(t, light_dirs[0]);
+                            double d1, d2, d3; //the inverted distances to the 3 points.
+                            d1 = 1 / point.minus(t.p1(projected_points)).norm();
+                            d2 = 1 / point.minus(t.p2(projected_points)).norm();
+                            d3 = 1 / point.minus(t.p3(projected_points)).norm();
 
-                            double r = 0.7;
-                            double g = 0.7;
-                            double b = 0.7;
+                            double sum = d1 + d2 + d3;
+                            double t1 = d1 / sum;
+                            double t2 = d2 / sum;
+                            double t3 = d3 / sum;
 
-                            r = Math.min(r * intensity, 1);
-                            g = Math.min(g * intensity, 1);
-                            b = Math.min(b * intensity, 1);
+                            double interp = t1 * vSS[t.i1].intensity + t2 * vSS[t.i2].intensity + t3 * vSS[t.i3].intensity;
+
+                            double r = Math.sin(average_pos.x() / 10.0) * 0.5 + 0.5;
+                            double g = Math.sin(average_pos.y() / 10.0) * 0.5 + 0.5;
+                            double b = Math.sin(average_pos.z() / 10.0) * 0.5 + 0.5;
+
+                            r = Math.min(r * interp, 1);
+                            g = Math.min(g * interp, 1);
+                            b = Math.min(b * interp, 1);
 
                             int ir = (int) (r * 0xff);
                             int ig = (int) (g * 0xff);
@@ -884,6 +896,11 @@ class Screen {
         }
     }
 
+    class VertexShadingState {
+        double intensity = 0;
+        int triangle_count = 0;
+    }
+
     public void drawTriangles(Triangle[] triangles, Vector3[] points, PerspectiveProjector projector, Vector3[] light_dirs) {
 
         long tbp = System.nanoTime();
@@ -891,9 +908,24 @@ class Screen {
         for(int i = 0; i < points.length; ++i) {
             projected_points[i] = points[i].z() < 0.2  ? null : projector.project(points[i]);
         }
+
+        VertexShadingState[] vSS = new VertexShadingState[points.length];
         for(Triangle t : triangles) {
             t.computed = false;
             t.compute_inner_triangle_normal(points);
+
+            //illuminate vertices
+            double ill = illumination(t, light_dirs[0]);
+            for(int i : List.of(t.i1, t.i2, t.i3)) {
+                if(vSS[i] == null) {
+                    vSS[i] = new VertexShadingState();
+                    vSS[i].intensity = ill;
+                    vSS[i].triangle_count = 1;           
+                } else {
+                    vSS[i].intensity = vSS[i].intensity * vSS[i].triangle_count / (vSS[i].triangle_count + 1) + ill / (vSS[i].triangle_count + 1);
+                    vSS[i].triangle_count++;
+                }
+            }
         }
 
         Arrays.sort(triangles, zTriComparator(points));
@@ -909,7 +941,7 @@ class Screen {
             final int start = (int) (ratio * i);
             final int end = (int) (ratio * (i+1));
             threads[i] = new Thread(() -> {
-                rasterize(triangles, start, end, points, projected_points, light_dirs);
+                rasterize(triangles, start, end, points, projected_points, vSS);
             });
             threads[i].start();
         }
