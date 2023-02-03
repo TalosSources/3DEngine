@@ -1,6 +1,5 @@
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.sql.Time;
 import java.util.Random;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,10 +21,13 @@ public class Main{
 
     public static void main(String[] args) {
 
-        Screen screen = new Screen(new Vector2(-8, -8 * 108.0 / 192.0), new Vector2(8, 8 * 108.0 / 192.0), 1280, 720, 1);
+        int width = 300, height = 300;
+
+        Screen screen = new Screen(new Vector2(-8, -8), new Vector2(8, 8), width, height, 3);
         PerspectiveProjector projector = new PerspectiveProjector(4);
 
         JFrame frame = new JFrame();
+        frame.setSize(width, height);
         frame.getContentPane().setLayout(new FlowLayout());
         JLabel label = new JLabel(new ImageIcon(screen.image()));
         frame.getContentPane().add(label);
@@ -39,12 +41,12 @@ public class Main{
         boolean move = true;
         double speedx = 0;
         double amplitudex = 0;
-        double speedy = 1.1;
+        double speedy = 2.3;
         double amplitudey = 1.5;
         double speedz = 0;
         double amplitudez = 0;
-        double rotation_speedx = 1.2;
-        double rotation_speedy = 1;
+        double rotation_speedx = 1;
+        double rotation_speedy = 3;
         //double speed_translation = 2;
 
         //int nCube = 3;
@@ -77,7 +79,7 @@ public class Main{
         //Cube cube2 = new Cube(new Vector3(1, -1.5, 4), 2, 0x77ff00ff, 8);
         //Vector3 cube_center2 = new Vector3(2, -0.5, 5);
 
-        Object3D[] objects = { Object3D.readObj(new File("monkey.obj")) };
+        Object3D[] objects = { Object3D.readObj(new File("models/teapot.obj")) };
 
         Vector3[] base_points = get_points(objects);
         Triangle triangles[] = get_triangles(objects);
@@ -100,7 +102,7 @@ public class Main{
                 e.printStackTrace();
             }
             long current_time = System.nanoTime();
-            //System.out.printf("Frame time : %f ms\n", (current_time - t1) * 1e-6);
+            System.out.printf("Frame time : %f ms\n", (current_time - t1) * 1e-6);
             t1 = current_time;
             double elapsed = (t1 - t0) * 1e-9;
 
@@ -133,23 +135,55 @@ public class Main{
             //    object_projected_points[i] = projected_points;
             //}
 
-            Vector3 offset = move ? new Vector3(Math.sin((t1 - t0)* 1e-9 * speedx) * amplitudex, 
-                Math.sin((t1 - t0)* 1e-9 * speedy) * amplitudey, Math.sin((t1 - t0)* 1e-9 * speedz) * amplitudez + 4) : new Vector3(2,2, 2);
-            
+            long tbt = System.nanoTime();
 
+            Vector3 offset = move ? new Vector3(Math.sin((t1 - t0)* 1e-9 * speedx) * amplitudex, 
+                Math.sin((t1 - t0)* 1e-9 * speedy) * amplitudey -2, Math.sin((t1 - t0)* 1e-9 * speedz) * amplitudez + 5) : new Vector3(2,2, 2);
+            
+            int n_threads = 1;
+            Thread[] threads = new Thread[n_threads];
+            double ratio = (double) base_points.length / n_threads;
             Vector3[] points = new Vector3[base_points.length];
-            for(int i = 0; i < points.length; ++i) {
-                points[i] = base_points[i].plus(offset);
-                points[i] = points[i].rotate_y_axis(offset, (t1 - t0) * 1e-9 * rotation_speedy);
-                points[i] = points[i].rotate_x_axis(offset, (t1 - t0) * 1e-9 * rotation_speedx);
+            for(int k = 0; k < n_threads; ++k) {
+                final int start = (int) (ratio * k);
+                final int end = (int) (ratio * (k + 1));
+                final long ft1 = t1;
+                threads[k] = new Thread(() -> {
+                    for(int i = start; i < end; ++i) {
+                        points[i] = base_points[i].plus(offset);
+                        points[i] = points[i].rotate_y_axis(offset, (ft1 - t0) * 1e-9 * rotation_speedy);
+                        points[i] = points[i].rotate_x_axis(offset, (ft1 - t0) * 1e-9 * rotation_speedx);
+                    }
+                });
+                threads[k].start();
+            }
+            for(Thread t : threads) {
+                try {
+                    t.join();
+                } catch (InterruptedException e) {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
             }
 
-            screen.resetImage();
+            long tat = System.nanoTime();
+            double elapsed_transform = (tat - tbt) * 1e-6;
+            System.out.println("Time to transform : " + elapsed_transform + "ms");
 
+            long tbd = System.nanoTime();
             //Draw the plane by defining a screen on it
             screen.drawTriangles(triangles, points, projector, light_dirs);
+            long tad = System.nanoTime();
+            double elapsed_draw = (tad - tbd) * 1e-6;
+            System.out.println("Time to draw : " + elapsed_draw + "ms");
 
+            long tbr = System.nanoTime();
             label.setIcon(new ImageIcon(screen.image()));
+
+            screen.resetImage();
+            long tar = System.nanoTime();
+            double elapsed_reset = (tar - tbr) * 1e-6;
+            System.out.println("Time to reset : " + elapsed_reset + "ms");
 
         }
 
@@ -557,9 +591,9 @@ class Triangle {
 
     private final int i1, i2, i3;
 
-    public final double r = 0.25; 
-    public final double g = 0.75; 
-    public final double b = 0.55; 
+    public final double r = 0.871; 
+    public final double g = 0.667; 
+    public final double b = 0.647; 
 
 
     //cached normal vectors to the sides of the triangle
@@ -772,6 +806,24 @@ class Screen {
         }
     }
 
+    private double illumination(Triangle t, Vector3 light_dir) {
+
+        double k_d = 0.1;
+        double k_s = 1.0;
+        double ambiant = 0.1;
+        double cst = 0.8;
+
+        double diffuse = Math.max(0, light_dir.dot(t.normal()));
+        diffuse *= k_d;
+
+        Vector3 v = new Vector3(0, 0, 1);
+        Vector3 h = light_dir.plus(v).normalized();
+        double q = 10;
+        double specular = k_s * Math.pow(t.normal().dot(h), q);
+
+        return ambiant + (diffuse + specular) * cst;
+    }
+
     private void rasterize(Triangle[] triangles, int start, int end, Vector3[] points, Vector2[] projected_points, Vector3[] light_dirs) {
         for(int k = start; k < end; ++k) {
             Triangle t = triangles[k];
@@ -800,15 +852,12 @@ class Screen {
                         //if(previous_contained) {
                             //Shading stuff
 
-                            double r = t.r;
-                            double g = t.g;
-                            double b = t.b;
+                            double intensity = illumination(t, light_dirs[0]);
 
-                            double intensity = 0;
-                            for (Vector3 light_dir : light_dirs) {
-                                intensity += Math.max(0, light_dir.dot(t.normal()));
-                            } 
-                            //intensity = 1.0;
+                            double r = 0.7;
+                            double g = 0.7;
+                            double b = 0.7;
+
                             r = Math.min(r * intensity, 1);
                             g = Math.min(g * intensity, 1);
                             b = Math.min(b * intensity, 1);
@@ -820,7 +869,7 @@ class Screen {
                             int rgb = (ir << 16) | (ig << 8) | (ib);
 
                             drawPixel(i, j, rgb);
-                        /* } else {
+                         /* } else {
                             previous_contained = true;
                             drawPixel(i, j, 0xffffff);
                         }
@@ -837,6 +886,7 @@ class Screen {
 
     public void drawTriangles(Triangle[] triangles, Vector3[] points, PerspectiveProjector projector, Vector3[] light_dirs) {
 
+        long tbp = System.nanoTime();
         Vector2[] projected_points = new Vector2[points.length];
         for(int i = 0; i < points.length; ++i) {
             projected_points[i] = points[i].z() < 0.2  ? null : projector.project(points[i]);
@@ -847,6 +897,9 @@ class Screen {
         }
 
         Arrays.sort(triangles, zTriComparator(points));
+        long  tap = System.nanoTime();
+        double elasped_projection = (tap - tbp) * 1e-6;
+        System.out.println("Time to project : " + elasped_projection + "ms");
 
         int n_threads = 1;
         Thread[] threads = new Thread[n_threads];
@@ -870,7 +923,7 @@ class Screen {
             }
         }
         double dt = (System.nanoTime() - t0) * 1e-6;
-        //System.out.printf("Time for threads rasterisation : %f ms \n", dt);
+        System.out.printf("Time to raster : %fms \n", dt);
 
     }
 
