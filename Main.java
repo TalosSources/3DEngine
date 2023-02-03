@@ -79,7 +79,7 @@ public class Main{
         //Cube cube2 = new Cube(new Vector3(1, -1.5, 4), 2, 0x77ff00ff, 8);
         //Vector3 cube_center2 = new Vector3(2, -0.5, 5);
 
-        Object3D[] objects = { Object3D.readObj(new File("models/spaceship.obj")) };
+        Object3D[] objects = { Object3D.readObj(new File("models/teapot.obj")) };
 
         Vector3[] base_points = get_points(objects);
         Triangle triangles[] = get_triangles(objects);
@@ -138,9 +138,9 @@ public class Main{
             long tbt = System.nanoTime();
 
             Vector3 offset = move ? new Vector3(Math.sin((t1 - t0)* 1e-9 * speedx) * amplitudex, 
-                Math.sin((t1 - t0)* 1e-9 * speedy) * amplitudey, Math.sin((t1 - t0)* 1e-9 * speedz) * amplitudez + 6) : new Vector3(2,2, 2);
+                Math.sin((t1 - t0)* 1e-9 * speedy) * amplitudey, Math.sin((t1 - t0)* 1e-9 * speedz) * amplitudez + 5) : new Vector3(2,2, 2);
             
-            int n_threads = 1;
+            int n_threads = 8;
             Thread[] threads = new Thread[n_threads];
             double ratio = (double) base_points.length / n_threads;
             Vector3[] points = new Vector3[base_points.length];
